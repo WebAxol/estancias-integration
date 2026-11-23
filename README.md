@@ -38,13 +38,13 @@ Prometheus and Grafana are planned and not part of the stack yet.
    docker compose ps
    ```
 
-4. Check the API. It listens on `127.0.0.1:${API_PORT}` (default 8000):
+4. Check the API. It listens on `0.0.0.0:${API_PORT}` (default 8000), so other devices on the network can reach it:
 
    ```bash
    curl http://127.0.0.1:8000/docs
    ```
 
-Postgres is available on `127.0.0.1:${POSTGRES_PORT}` (default 5432). Both ports are bound to localhost only.
+Postgres is available on `127.0.0.1:${POSTGRES_PORT}` (default 5432), bound to localhost only.
 
 ## Common commands
 
