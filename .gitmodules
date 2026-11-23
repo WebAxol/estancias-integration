@@ -1,0 +1,8 @@
+[submodule "api"]
+	path = api
+	url = https://github.com/WebAxol/estancias-api.git
+	branch = master
+[submodule "db"]
+	path = db
+	url = https://github.com/WebAxol/estancias-db.git
+	branch = master

@@ -1,0 +1,62 @@
+name: estancias
+
+services:
+  db:
+    image: postgres:17
+    container_name: estancias-db
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      # Bound to localhost only so the DB isn't exposed on the network
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Run once on first init of an empty data volume, in ascending filename order
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./api
+    container_name: estancias-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-UTC}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_TTL_MINUTES: ${JWT_TTL_MINUTES:-60}
+      # Inside the compose network the API reaches Postgres by service name and container port
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      BOOTSTRAP_ADMIN_ROLE_ID: ${BOOTSTRAP_ADMIN_ROLE_ID:-1}
+      BOOTSTRAP_SUBSIDIARY_ID: ${BOOTSTRAP_SUBSIDIARY_ID:-1}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  db_data:
