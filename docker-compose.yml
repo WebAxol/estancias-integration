@@ -20,6 +20,7 @@ services:
       timeout: 5s
       retries: 10
 
+
   api:
     build: ./api
     container_name: estancias-api
