@@ -22,7 +22,7 @@ def app_env(clean_pg, monkeypatch):  # noqa: F811
     """
     with clean_pg.connection() as conn:
         schema = conn.execute("SHOW search_path").fetchone()[0].split(",")[0].strip()
-        conn.execute("TRUNCATE Capacitation, EmployeeCapacitation, RevokedToken RESTART IDENTITY CASCADE")
+        conn.execute("TRUNCATE Capacitation, EmployeeCapacitation, RevokedToken, LoginAttempt RESTART IDENTITY CASCADE")
         conn.execute("ALTER TABLE Subsidiary ALTER COLUMN uniqueId RESTART WITH 1")
         conn.execute("ALTER TABLE Room ALTER COLUMN uniqueId RESTART WITH 1")
         conn.execute("INSERT INTO Subsidiary (name) VALUES ('S1'), ('S2')")
