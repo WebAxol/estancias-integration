@@ -1,0 +1,246 @@
+# Custom PostgreSQL queries for extended metrics collection
+# These queries provide deeper insights into database performance and usage
+
+# Database size metrics
+pg_database_size:
+  query: |
+    SELECT 
+      datname as database,
+      pg_database_size(datname) as size_bytes
+    FROM pg_database
+    WHERE datname NOT IN ('template0', 'template1')
+  metrics:
+    - database:
+        usage: "LABEL"
+        description: "Name of the database"
+    - size_bytes:
+        usage: "GAUGE"
+        description: "Size of the database in bytes"
+
+# Table sizes and row counts
+pg_table_stats:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      pg_total_relation_size(schemaname||'.'||tablename) as total_bytes,
+      pg_relation_size(schemaname||'.'||tablename) as table_bytes,
+      pg_indexes_size(schemaname||'.'||tablename) as index_bytes,
+      n_live_tup as live_tuples,
+      n_dead_tup as dead_tuples
+    FROM pg_stat_user_tables
+    ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - tablename:
+        usage: "LABEL"
+        description: "Table name"
+    - total_bytes:
+        usage: "GAUGE"
+        description: "Total size of table including indexes and TOAST data"
+    - table_bytes:
+        usage: "GAUGE"
+        description: "Size of table data"
+    - index_bytes:
+        usage: "GAUGE"
+        description: "Size of indexes"
+    - live_tuples:
+        usage: "GAUGE"
+        description: "Number of live tuples"
+    - dead_tuples:
+        usage: "GAUGE"
+        description: "Number of dead tuples"
+
+# Connection statistics
+pg_connection_stats:
+  query: |
+    SELECT
+      datname as database,
+      count(*) as connections,
+      count(*) FILTER (WHERE state = 'active') as active_connections,
+      count(*) FILTER (WHERE state = 'idle') as idle_connections,
+      count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_transaction
+    FROM pg_stat_activity
+    WHERE datname IS NOT NULL
+    GROUP BY datname
+  metrics:
+    - database:
+        usage: "LABEL"
+        description: "Database name"
+    - connections:
+        usage: "GAUGE"
+        description: "Total number of connections"
+    - active_connections:
+        usage: "GAUGE"
+        description: "Number of active connections"
+    - idle_connections:
+        usage: "GAUGE"
+        description: "Number of idle connections"
+    - idle_in_transaction:
+        usage: "GAUGE"
+        description: "Number of idle in transaction connections"
+
+# Transaction statistics
+pg_transaction_stats:
+  query: |
+    SELECT
+      datname as database,
+      xact_commit as commits,
+      xact_rollback as rollbacks,
+      blks_read as blocks_read,
+      blks_hit as blocks_hit,
+      tup_returned as tuples_returned,
+      tup_fetched as tuples_fetched,
+      tup_inserted as tuples_inserted,
+      tup_updated as tuples_updated,
+      tup_deleted as tuples_deleted
+    FROM pg_stat_database
+    WHERE datname NOT IN ('template0', 'template1')
+  metrics:
+    - database:
+        usage: "LABEL"
+        description: "Database name"
+    - commits:
+        usage: "COUNTER"
+        description: "Number of transactions committed"
+    - rollbacks:
+        usage: "COUNTER"
+        description: "Number of transactions rolled back"
+    - blocks_read:
+        usage: "COUNTER"
+        description: "Number of disk blocks read"
+    - blocks_hit:
+        usage: "COUNTER"
+        description: "Number of times disk blocks were found in the buffer cache"
+    - tuples_returned:
+        usage: "COUNTER"
+        description: "Number of rows returned by queries"
+    - tuples_fetched:
+        usage: "COUNTER"
+        description: "Number of rows fetched by queries"
+    - tuples_inserted:
+        usage: "COUNTER"
+        description: "Number of rows inserted"
+    - tuples_updated:
+        usage: "COUNTER"
+        description: "Number of rows updated"
+    - tuples_deleted:
+        usage: "COUNTER"
+        description: "Number of rows deleted"
+
+# Index usage statistics
+pg_index_usage:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      indexname,
+      idx_scan as index_scans,
+      idx_tup_read as tuples_read,
+      idx_tup_fetch as tuples_fetched
+    FROM pg_stat_user_indexes
+    ORDER BY idx_scan DESC
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - tablename:
+        usage: "LABEL"
+        description: "Table name"
+    - indexname:
+        usage: "LABEL"
+        description: "Index name"
+    - index_scans:
+        usage: "COUNTER"
+        description: "Number of index scans initiated on this index"
+    - tuples_read:
+        usage: "COUNTER"
+        description: "Number of index entries returned by scans"
+    - tuples_fetched:
+        usage: "COUNTER"
+        description: "Number of live table rows fetched by index scans"
+
+# Cache hit ratio
+pg_cache_hit_ratio:
+  query: |
+    SELECT
+      datname as database,
+      CASE 
+        WHEN blks_hit + blks_read = 0 THEN 0
+        ELSE (blks_hit::float / (blks_hit + blks_read)) * 100
+      END as cache_hit_ratio
+    FROM pg_stat_database
+    WHERE datname NOT IN ('template0', 'template1')
+  metrics:
+    - database:
+        usage: "LABEL"
+        description: "Database name"
+    - cache_hit_ratio:
+        usage: "GAUGE"
+        description: "Cache hit ratio percentage"
+
+# Long running queries
+pg_slow_queries:
+  query: |
+    SELECT
+      datname as database,
+      usename as username,
+      application_name,
+      EXTRACT(EPOCH FROM (now() - query_start)) as query_duration_seconds,
+      state,
+      wait_event_type,
+      wait_event
+    FROM pg_stat_activity
+    WHERE state != 'idle'
+      AND query_start IS NOT NULL
+      AND datname IS NOT NULL
+      AND EXTRACT(EPOCH FROM (now() - query_start)) > 1
+    ORDER BY query_duration_seconds DESC
+    LIMIT 20
+  metrics:
+    - database:
+        usage: "LABEL"
+        description: "Database name"
+    - username:
+        usage: "LABEL"
+        description: "Username"
+    - application_name:
+        usage: "LABEL"
+        description: "Application name"
+    - state:
+        usage: "LABEL"
+        description: "Query state"
+    - wait_event_type:
+        usage: "LABEL"
+        description: "Type of event the backend is waiting for"
+    - wait_event:
+        usage: "LABEL"
+        description: "Wait event name"
+    - query_duration_seconds:
+        usage: "GAUGE"
+        description: "Duration of the query in seconds"
+
+# Replication lag (if applicable)
+pg_replication_lag:
+  query: |
+    SELECT
+      application_name,
+      client_addr,
+      state,
+      EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp())) as lag_seconds
+    FROM pg_stat_replication
+  metrics:
+    - application_name:
+        usage: "LABEL"
+        description: "Application name"
+    - client_addr:
+        usage: "LABEL"
+        description: "Client IP address"
+    - state:
+        usage: "LABEL"
+        description: "Replication state"
+    - lag_seconds:
+        usage: "GAUGE"
+        description: "Replication lag in seconds"

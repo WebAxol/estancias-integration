@@ -50,6 +50,28 @@ services:
       retries: 5
       start_period: 10s
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: estancias-postgres-exporter
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Connection string for PostgreSQL
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
+      # Enable additional metrics
+      PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres_exporter/queries.yaml"
+    ports:
+      - "127.0.0.1:${POSTGRES_EXPORTER_PORT:-9187}:9187"
+    volumes:
+      - ./postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9187/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   prometheus:
     image: prom/prometheus:latest
     container_name: estancias-prometheus
@@ -67,6 +89,7 @@ services:
       - prometheus_data:/prometheus
     depends_on:
       - api
+      - postgres-exporter
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 10s
