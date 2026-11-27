@@ -21,13 +21,33 @@ jobs:
     env:
       COMPOSE_FILE: docker-compose.ci.yml
     steps:
-      # api/ (estancias-api) provides the image under test and the test helpers,
-      # db/ (estancias-db) provides the migrations. Both are submodules pinned here.
+      # The default GITHUB_TOKEN only reads this repository, so the private submodules
+      # are fetched over SSH with one read-only deploy key per repository.
+      - name: Require the deploy keys
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          DB_KEY: ${{ secrets.DB_KEY }}
+        run: |
+          for name in API_KEY DB_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name is not set. Add the private deploy key under Settings > Secrets and variables > Actions > Repository secrets."
+              exit 1
+            fi
+          done
+
       - uses: actions/checkout@v4
+
+      # Each key comment must be the SSH URL of its repository, for example
+      # git@github.com:WebAxol/estancias-api.git. The action uses it to pick the key
+      # per repository and rewrites the https URLs of .gitmodules to SSH.
+      - uses: webfactory/ssh-agent@v0.9.0
         with:
-          submodules: recursive
-          # Needed only while the submodule repositories are private.
-          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+          ssh-private-key: |
+            ${{ secrets.API_KEY }}
+            ${{ secrets.DB_KEY }}
+
+      - name: Fetch submodules
+        run: git submodule update --init --recursive --depth=1
 
       - name: Check submodules and migrations
         run: |

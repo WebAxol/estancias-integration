@@ -102,4 +102,4 @@ docker compose -f docker-compose.ci.yml down -v
 ```
 It needs no `.env`, publishes no ports and starts no monitoring services. The run fails when any test fails or is skipped, because a skipped database test means the setup is broken. Pass pytest arguments after the service name, for example `tests tests/repository -k employee`.
 
-CI (`.github/workflows/ci.yml`) runs the same command. If the submodule repositories are private, add a `SUBMODULES_TOKEN` secret with read access.
+CI (`.github/workflows/ci.yml`) runs the same command. The submodule repositories are private. CI fetches them over SSH with two read-only deploy keys, one per repository. Add the matching private keys as repository secrets `API_KEY` (for `estancias-api`) and `DB_KEY` (for `estancias-db`). Create each key with the repository SSH URL as its comment, for example `ssh-keygen -t ed25519 -N "" -C "git@github.com:WebAxol/estancias-api.git" -f api_key`.
