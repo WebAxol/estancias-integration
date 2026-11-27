@@ -7,7 +7,7 @@ Monorepo that runs the backend services together with Docker Compose.
 | `api/` | [estancias-api](https://github.com/WebAxol/estancias-api) (submodule) | FastAPI service |
 | `db/`  | [estancias-db](https://github.com/WebAxol/estancias-db) (submodule) | PostgreSQL migrations |
 
-Prometheus and Grafana are planned and not part of the stack yet.
+The stack includes Prometheus for metrics collection and Grafana for visualization. See [MONITORING.md](MONITORING.md) for details.
 
 ## Requirements
 
@@ -38,13 +38,44 @@ Prometheus and Grafana are planned and not part of the stack yet.
    docker compose ps
    ```
 
+   Or use the helper script for monitoring:
+
+   ```bash
+   ./start-monitoring.sh
+   ```
+
 4. Check the API. It listens on `0.0.0.0:${API_PORT}` (default 8000), so other devices on the network can reach it:
 
    ```bash
    curl http://127.0.0.1:8000/docs
    ```
 
-Postgres is available on `127.0.0.1:${POSTGRES_PORT}` (default 5432), bound to localhost only.
+5. Access the monitoring dashboards:
+   - **API Docs**: http://localhost:8000/docs
+   - **API Metrics**: http://localhost:8000/metrics
+   - **Prometheus**: http://localhost:9090
+   - **Grafana**: http://localhost:3000 (admin/admin)
+
+Postgres is available on `127.0.0.1:${POSTGRES_PORT}` (default 5432), bound to localhost only. Prometheus is on `127.0.0.1:${PROMETHEUS_PORT}` (default 9090). Grafana is on `0.0.0.0:${GRAFANA_PORT}` (default 3000).
+
+## Monitoring
+
+The integration includes a full monitoring stack with Prometheus and Grafana:
+
+- **Prometheus** scrapes metrics from the API every 10 seconds
+- **Grafana** provides pre-configured dashboards for visualization
+- **Metrics endpoint** at `/metrics` exposes HTTP request metrics
+
+See [MONITORING.md](MONITORING.md) for detailed information about:
+- Available metrics and what they track
+- How to use the Grafana dashboards
+- PromQL queries for custom analysis
+- Troubleshooting and best practices
+
+Quick test:
+```bash
+./test-metrics.sh
+```
 
 ## Common commands
 
@@ -70,6 +101,10 @@ All variables live in the root `.env` (ignored by git). `.env.sample` lists them
 | `JWT_SECRET`, `JWT_TTL_MINUTES` | api | Token signing key and lifetime |
 | `DB_POOL_MAX_SIZE` | api | Max database connections |
 | `BOOTSTRAP_ADMIN_*`, `BOOTSTRAP_SUBSIDIARY_ID` | api | First admin created at startup |
+| `PROMETHEUS_PORT` | prometheus | Host port for Prometheus (localhost only) |
+| `GRAFANA_PORT` | grafana | Host port for Grafana |
+| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | grafana | Grafana admin credentials |
+| `METRICS_ENABLED` | api | Enable/disable Prometheus metrics (default: true) |
 
 The API reaches Postgres at host `db`, port `5432`. Compose sets this itself, so `.env` has no `POSTGRES_HOST`.
 
