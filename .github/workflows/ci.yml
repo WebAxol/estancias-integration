@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Integration tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.ci.yml
+    steps:
+      # api/ (estancias-api) provides the image under test and the test helpers,
+      # db/ (estancias-db) provides the migrations. Both are submodules pinned here.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Needed only while the submodule repositories are private.
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+
+      - name: Check submodules and migrations
+        run: |
+          test -f api/Dockerfile
+          test -f api/tests/fakes.py
+          count=$(ls db/migrations/*.sql | wc -l)
+          echo "Found $count migrations"
+          test "$count" -gt 0
+
+      - name: Validate compose file
+        run: docker compose config --quiet
+
+      # Builds the api image, starts a clean PostgreSQL 17 and runs the suite in the
+      # api container. The run fails on any test failure or skipped test.
+      - name: Run integration tests
+        run: docker compose run --rm --build tests
+
+      - name: Show database logs on failure
+        if: failure()
+        run: docker compose logs db
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v --remove-orphans

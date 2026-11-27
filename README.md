@@ -84,3 +84,22 @@ git commit -m "Update submodules"
 ```
 
 To work on a service, `cd` into its folder, commit and push there first, then commit the new pointer here.
+## Integration tests
+`tests/` holds the tests that need a real PostgreSQL database. The `api` repository keeps only the tests that run without external services.
+
+They run in containers, so nothing is installed on the host and the services stay isolated. `docker-compose.ci.yml` starts a clean `postgres:17` (`db`) and a `tests` container built from `./api`, the same image as production. The tests container mounts read-only:
+
+| Mount | Source | Purpose |
+| ----- | ------ | ------- |
+| `/app/tests`, `/app/pytest.ini` | this repo | The tests |
+| `/app/api/tests` | `api/` submodule | Test helpers, imported as `api.tests.*` |
+| `/app/db/migrations` | `db/` submodule | Schema the tests apply to their own database or schema |
+
+Initialise the submodules, then run:
+```bash
+docker compose -f docker-compose.ci.yml run --rm --build tests
+docker compose -f docker-compose.ci.yml down -v
+```
+It needs no `.env`, publishes no ports and starts no monitoring services. The run fails when any test fails or is skipped, because a skipped database test means the setup is broken. Pass pytest arguments after the service name, for example `tests tests/repository -k employee`.
+
+CI (`.github/workflows/ci.yml`) runs the same command. If the submodule repositories are private, add a `SUBMODULES_TOKEN` secret with read access.

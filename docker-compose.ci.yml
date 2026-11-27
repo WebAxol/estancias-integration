@@ -1,0 +1,51 @@
+# Test stack for CI and local runs. Independent from docker-compose.yml, so it needs
+# no .env and starts none of the monitoring services.
+#
+#   docker compose -f docker-compose.ci.yml run --rm --build tests
+#   docker compose -f docker-compose.ci.yml down -v
+#
+# Isolation: each service runs in its own container. The tests run inside the image
+# built from ./api (the same Python, dependencies and `src` as production) and talk to
+# the `db` service over the compose network. Nothing is installed on the host and no
+# port is published. The code under test is never imported from the host checkout.
+name: estancias-ci
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      TZ: UTC
+    # No ./db/migrations in docker-entrypoint-initdb.d: the tests create their own
+    # database or schema and apply the migrations themselves.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  tests:
+    build: ./api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # tests/conftest.py: creates and drops its own database (needs a superuser).
+      TEST_POSTGRES_DSN: postgresql://postgres:postgres@db:5432/postgres
+      # tests/repository/conftest.py and tests/http/conftest.py: private schema.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+    working_dir: /app
+    entrypoint: ["sh", "/ci/run-tests.sh"]
+    volumes:
+      # The image holds only `src`. Everything else is mounted read-only.
+      - ./tests:/app/tests:ro
+      - ./pytest.ini:/app/pytest.ini:ro
+      # Test helpers of the api repository (imported as `api.tests.*`).
+      - ./api/tests:/app/api/tests:ro
+      # Schema owned by the db repository.
+      - ./db/migrations:/app/db/migrations:ro
+      - ./ci:/ci:ro
