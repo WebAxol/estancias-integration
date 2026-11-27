@@ -50,4 +50,7 @@ def clean_pg(pg_pool):
         )
         conn.execute("DELETE FROM Room WHERE uniqueId > 0")
         conn.execute("DELETE FROM Subsidiary WHERE uniqueId > 0")
+        # Tests assume the first subsidiary and room they insert get id 1, whatever ran before.
+        conn.execute("ALTER TABLE Subsidiary ALTER COLUMN uniqueId RESTART WITH 1")
+        conn.execute("ALTER TABLE Room ALTER COLUMN uniqueId RESTART WITH 1")
     return pg_pool

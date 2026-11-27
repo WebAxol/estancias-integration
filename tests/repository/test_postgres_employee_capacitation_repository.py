@@ -132,7 +132,9 @@ def test_complete_marks_the_assignment_once(seeded):
 
     done = repo.complete(saved.id, NOW)
     assert not done.is_pending and done.accredited_at == NOW
-    assert done.metadata.lastly_updated_at == NOW
+    # trg_record_metadata_updated_at stamps the update with the database clock.
+    assert done.metadata.lastly_updated_at >= NOW
+    assert done.metadata.lastly_updated_by == employee
     assert repo.complete(saved.id, NOW) is None
     assert repo.complete(9999, NOW) is None
 
