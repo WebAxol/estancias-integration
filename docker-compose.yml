@@ -20,7 +20,6 @@ services:
       timeout: 5s
       retries: 10
 
-
   api:
     build: ./api
     container_name: estancias-api
@@ -36,9 +35,9 @@ services:
       POSTGRES_PORT: "5432"
       # Enable Prometheus metrics
       METRICS_ENABLED: "true"
-    ports:
-      # Published on all host interfaces (0.0.0.0) so other devices can reach the API
-      - "0.0.0.0:${API_PORT:-8000}:8000"
+    expose:
+      # Solo accesible dentro de la red de Docker (para Nginx y Prometheus; evita acceso HTTP directo)
+      - "8000"
     healthcheck:
       test:
         - CMD
@@ -50,16 +49,33 @@ services:
       retries: 5
       start_period: 10s
 
+  nginx:
+    build: ./nginx
+    container_name: estancias-nginx
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      TLS_CN: "${TLS_CN:-localhost}"
+      TLS_SAN: "${TLS_SAN:-DNS:localhost,IP:127.0.0.1}"
+    ports:
+      - "0.0.0.0:${HTTP_PORT:-80}:80"
+      - "0.0.0.0:${HTTPS_PORT:-443}:443"
+      - "0.0.0.0:${API_PORT:-8000}:443"
+    volumes:
+      - nginx_certs:/etc/nginx/certs
+
   prometheus:
     image: prom/prometheus:latest
     container_name: estancias-prometheus
     restart: unless-stopped
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
@@ -100,3 +116,4 @@ volumes:
   db_data:
   prometheus_data:
   grafana_data:
+  nginx_certs:
