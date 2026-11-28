@@ -7,9 +7,9 @@ services:
     restart: unless-stopped
     # env_file is read straight from .env, so variables exported in the host shell cannot override it
     env_file: .env
-    ports:
-      # Bound to localhost only so the DB isn't exposed on the network
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    expose:
+      # Solo accesible dentro de la red de Docker (API y postgres-exporter); no se publica en el host
+      - "5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       # Run once on first init of an empty data volume, in ascending filename order
@@ -84,8 +84,9 @@ services:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
       # Enable additional metrics
       PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres_exporter/queries.yaml"
-    ports:
-      - "127.0.0.1:${POSTGRES_EXPORTER_PORT:-9187}:9187"
+    expose:
+      # Solo accesible dentro de la red de Docker (Prometheus); no se publica en el host
+      - "9187"
     volumes:
       - ./postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
     healthcheck:
@@ -104,8 +105,9 @@ services:
       - "--web.console.libraries=/etc/prometheus/console_libraries"
       - "--web.console.templates=/etc/prometheus/consoles"
       - "--web.enable-lifecycle"
-    ports:
-      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    expose:
+      # Solo accesible dentro de la red de Docker (Grafana); no se publica en el host
+      - "9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
